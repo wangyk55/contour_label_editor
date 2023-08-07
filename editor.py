@@ -3,6 +3,7 @@ import tkinter as tk
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
+from tkinter import filedialog
 
 
 class Point:
@@ -147,7 +148,27 @@ class Contour:
     
     def cache_result(self):
         return ([[p.x, p.y] for p in self.points], self.undo_stack, self.redo_stack)
+    
 
+def pop_err_win(message, font, winsize=(260, 60)):
+    global root
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    err_win_x = screen_width // 2 - winsize[0] // 2
+    err_win_y = screen_height // 2 - winsize[1] // 2
+    err = tk.Toplevel()
+    err.transient(root)
+    err.title("错误")
+    err.geometry(f"{winsize[0]}x{winsize[1]}+{err_win_x}+{err_win_y}")
+    err.resizable(False, False)
+    err.attributes("-topmost", True)
+    err.grab_set()
+    err.focus_set()
+    tk.Label(err, text=message, font=font).pack(fill=tk.BOTH, expand=True)
+    err.wait_window()
+    err.destroy()
+    root.destroy()
+    raise ValueError(message)
 
 def cvt_tkimages(imgs, scale):
     images = []
@@ -161,78 +182,191 @@ def cvt_tkimages(imgs, scale):
         images.append(img)
     return images
 
+def cvt_single_tkimage(img, scale):
+    global single_img
+    shape = (img.shape[0] * scale, img.shape[1] * scale)
+    single_img = cv2.resize(img, shape)
+    single_img = cv2.cvtColor(single_img, cv2.COLOR_BGR2RGB)
+    single_img = Image.fromarray(single_img)
+    single_img = ImageTk.PhotoImage(single_img)
+
 def cvt_tkpolygons(cnts, scale):
+    if cnts.shape[1] != 2:
+        pop_err_win(f"轮廓数据格式不正确\n期望形状为(点数, 2, 图像数)\n实际为{cnts.shape}", font=("微软雅黑", 10, "bold"), winsize=(300, 80))
     cnts = cnts * scale
     cnts = cnts[:, ::-1, :]
     cnts = cnts.transpose(2, 0, 1)
     return cnts.tolist()
 
 def save_new_cnts(scale):
-    global root
+    # global root
     global cnts
     global current_image_no
     global curr_contour
     global undo_stack
     global redo_stack
 
-    def cancel():
-        ask_win.destroy()
+    # def cancel():
+    #     ask_win.destroy()
     
-    def saveit(file_name):
+    # def saveit(file_name):
+    #     (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
+    #     new_cnts = cnts.copy()
+    #     new_cnts = np.array(new_cnts)
+    #     new_cnts = new_cnts.transpose(1, 2, 0)
+    #     new_cnts = new_cnts[:, ::-1, :]
+    #     new_cnts = new_cnts // scale
+    #     np.save(file_name, new_cnts.astype(np.float64))
+    #     ask_win.destroy()
+    
+    # def select_path(file_nameVar):
+    #     filename = filedialog.asksaveasfile(initialdir=".", initialfile=file_nameVar.get(), filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径")
+    #     if filename:
+    #         file_nameVar.set(filename)
+
+    # root_x = root.winfo_x()
+    # root_y = root.winfo_y()
+    # root_width = root.winfo_width()
+    # root_height = root.winfo_height()
+    # ask_win_x = root_x + root_width // 2 - 150
+    # ask_win_y = root_y + root_height // 2 - 50
+
+    # ask_win = tk.Toplevel(root)
+    # ask_win.title("保存")
+    # ask_win.geometry(f"300x100+{ask_win_x}+{ask_win_y}")
+    # ask_win.resizable(False, False)
+    # ask_win.attributes("-topmost", True)
+    # ask_win.grab_set()
+    # ask_win.focus_set()
+    # ask_win.transient(root)
+    # ask_win.protocol("WM_DELETE_WINDOW", lambda: cancel())
+
+    # tk.Label(ask_win, text="选择保存路径").pack()
+
+    # save_file_frame = tk.Frame(ask_win)
+    # file_name = tk.StringVar(save_file_frame, value=f"ACDC_RV_contour_200_new.npy")
+    # save_file_button = tk.Button(save_file_frame, text="选择路径", height=0, width=7)
+    # tk.Entry(save_file_frame, textvariable=file_name, width=20).pack(side=tk.LEFT)
+    # save_file_button.pack(side=tk.RIGHT)
+    # save_file_frame.pack()
+
+    # button_frame = tk.Frame(ask_win)
+    # place_holder = tk.Label(button_frame, text=" " * 7)
+    # button_frame.pack()
+
+    # save_button = tk.Button(button_frame, text="保存")
+    # cancel_button = tk.Button(button_frame, text="取消")
+
+    # save_button.pack(side=tk.LEFT)
+    # place_holder.pack(side=tk.LEFT)
+    # cancel_button.pack(side=tk.RIGHT)
+
+    # save_button.config(command=lambda:saveit(file_name.get()))
+    # cancel_button.config(command=lambda:cancel())
+    # save_file_button.config(command=lambda:select_path(file_name))
+    # ask_win.wait_window()
+    file = filedialog.asksaveasfile(initialdir=".", initialfile="ACDC_RV_contour_200_new.npy", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径", mode="wb")
+    if file:
         (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
         new_cnts = cnts.copy()
         new_cnts = np.array(new_cnts)
         new_cnts = new_cnts.transpose(1, 2, 0)
         new_cnts = new_cnts[:, ::-1, :]
         new_cnts = new_cnts // scale
-        np.save(file_name, new_cnts.astype(np.float64))
-        ask_win.destroy()
+        np.save(file, new_cnts.astype(np.float64))
+        file.close()
 
-    root_x = root.winfo_x()
-    root_y = root.winfo_y()
-    root_width = root.winfo_width()
-    root_height = root.winfo_height()
-    ask_win_x = root_x + root_width // 2 - 150
-    ask_win_y = root_y + root_height // 2 - 50
 
-    ask_win = tk.Toplevel(root)
-    ask_win.title("保存")
-    ask_win.geometry(f"300x100+{ask_win_x}+{ask_win_y}")
-    ask_win.resizable(False, False)
-    ask_win.attributes("-topmost", True)
-    ask_win.grab_set()
-    ask_win.focus_set()
-    ask_win.transient(root)
-    ask_win.protocol("WM_DELETE_WINDOW", lambda: cancel())
+def pop_startup_window(root):
+    def cancel():
+        img_file_nameVar.set(None)
+        cnt_file_nameVar.set(None)
+        ask_filename_win.destroy()
+        root.destroy()
+    
+    def openit():
+        global img_file_name
+        global cnt_file_name
+        img_file_name = img_entry.get()
+        cnt_file_name = cnt_entry.get()
+        ask_filename_win.destroy()
+    
+    def select_file(file_nameVar, title):
+        filename = filedialog.askopenfilename(initialdir=".", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择{title}")
+        if filename:
+            file_nameVar.set(filename)
 
-    tk.Label(ask_win, text="请输入文件名").pack()
-    file_name = tk.StringVar(ask_win, value=f"ACDC_RV_contour_200_new.npy")
-    tk.Entry(ask_win, textvariable=file_name, width=30).pack()
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    ask_win_x = screen_width // 2 - 150
+    ask_win_y = screen_height // 2 - 60
 
-    button_frame = tk.Frame(ask_win)
+    ask_filename_win = tk.Toplevel(root)
+    ask_filename_win.title("打开文件")
+    ask_filename_win.geometry(f"300x120+{ask_win_x}+{ask_win_y}")
+    ask_filename_win.resizable(False, False)
+    ask_filename_win.attributes("-topmost", True)
+    ask_filename_win.grab_set()
+    ask_filename_win.focus_set()
+    ask_filename_win.transient(root)
+    ask_filename_win.protocol("WM_DELETE_WINDOW", lambda: cancel())
+
+    tk.Label(ask_filename_win, text="请输入文件路径").pack()
+    img_file_nameVar = tk.StringVar(ask_filename_win, value=f"ACDC_RV_images_128.npy")
+    cnt_file_nameVar = tk.StringVar(ask_filename_win, value=f"ACDC_RV_contour_200.npy")
+    file_select_frame = tk.Frame(ask_filename_win)
+    img_select_frame = tk.Frame(file_select_frame)
+    cnt_select_frame = tk.Frame(file_select_frame)
+    tk.Label(img_select_frame, text="图像npy").pack(side=tk.LEFT)
+    img_entry = tk.Entry(img_select_frame, textvariable=img_file_nameVar, width=20)
+    img_select_button = tk.Button(img_select_frame, text="选择文件", height=0, width=7)
+    tk.Label(cnt_select_frame, text="轮廓npy").pack(side=tk.LEFT)
+    cnt_entry = tk.Entry(cnt_select_frame, textvariable=cnt_file_nameVar, width=20)
+    cnt_select_button = tk.Button(cnt_select_frame, text="选择文件", height=0, width=7)
+    img_entry.pack(side=tk.LEFT)
+    cnt_entry.pack(side=tk.LEFT)
+    img_select_frame.pack()
+    cnt_select_frame.pack()
+    file_select_frame.pack()
+
+    button_frame = tk.Frame(ask_filename_win)
     place_holder = tk.Label(button_frame, text=" " * 7)
     button_frame.pack()
 
-    save_button = tk.Button(button_frame, text="保存")
+    open_button = tk.Button(button_frame, text="打开")
     cancel_button = tk.Button(button_frame, text="取消")
 
-    save_button.pack(side=tk.LEFT)
+    open_button.pack(side=tk.LEFT)
     place_holder.pack(side=tk.LEFT)
     cancel_button.pack(side=tk.RIGHT)
+    img_select_button.pack(side=tk.RIGHT)
+    cnt_select_button.pack(side=tk.RIGHT)
 
-    save_button.config(command=lambda:saveit(file_name.get()))
+    open_button.config(command=lambda:openit())
     cancel_button.config(command=lambda:cancel())
-    ask_win.wait_window()
+    img_select_button.config(command=lambda:select_file(img_file_nameVar, "图像npy"))
+    cnt_select_button.config(command=lambda:select_file(cnt_file_nameVar, "轮廓npy"))
+    ask_filename_win.wait_window()
 
 
 if __name__ == "__main__":
 
-    images = np.load("ACDC_RV_images_128.npy").astype(np.uint8)
-    contours = np.load("ACDC_RV_contour_200.npy").astype(np.uint16)
-    images_shape = images.shape
+    single_img = None
+
+    img_file_name = None
+    cnt_file_name = None
+
+    root = tk.Tk()
+    pop_startup_window(root)
+    if img_file_name is None or cnt_file_name is None:
+        print("未选择文件，程序退出")
+        exit(0)
+    print("正在读取数据...")
+    images = np.load(img_file_name).astype(np.uint8)
+    contours = np.load(cnt_file_name).astype(np.uint16)
 
     print("正在创建画板...")
-    root = tk.Tk()
+    images_shape = images.shape
     scale = 10
     canvas_width = images_shape[0] * scale
     canvas_height = images_shape[1] * scale
@@ -240,46 +374,78 @@ if __name__ == "__main__":
     undo_stack = [[] for _ in range(image_no)]
     redo_stack = [[] for _ in range(image_no)]
     current_image_no = 0
-    root.title(f"标签编辑器 - {current_image_no + 1} / {image_no}")
+    root.title(f"标签编辑器 - {current_image_no} / {image_no - 1}")
     canvas = tk.Canvas(root, bg="white", width=canvas_width, height=canvas_height)
 
     button_frame = tk.Frame(root)
-    place_holder = tk.Label(button_frame, text=" " * 10)
-    button_frame.pack()
+    place_holder1 = tk.Label(button_frame, text=" " * 5)
+    place_holder2 = tk.Label(button_frame, text=" " * 5)
+    button_frame.pack(fill=tk.BOTH)
+    jump_num = tk.Entry(button_frame)
+    jump_button =tk.Button(button_frame, text="跳转")
     prev_image_button = tk.Button(button_frame, text="前一张")
     next_image_button = tk.Button(button_frame, text="后一张")
-    save_button = tk.Button(button_frame, text="保存")
-    prev_image_button.pack(side=tk.LEFT)
-    next_image_button.pack(side=tk.LEFT)
-    place_holder.pack(side=tk.LEFT)
-    save_button.pack(side=tk.RIGHT)
+    save_button = tk.Button(button_frame, text="保存", width=10)
+    place_holder1.pack(side=tk.LEFT, anchor=tk.CENTER)
+    jump_num.pack(side=tk.LEFT, anchor=tk.W)
+    jump_button.pack(side=tk.LEFT, anchor=tk.W)
+    prev_image_button.pack(side=tk.LEFT, anchor=tk.CENTER)
+    next_image_button.pack(side=tk.LEFT, anchor=tk.CENTER)
+    place_holder2.pack(side=tk.RIGHT, anchor=tk.CENTER)
+    save_button.pack(side=tk.RIGHT, anchor=tk.E)
+    canvas.pack()
+
 
     print("正在转换数据...")
-    imgs = cvt_tkimages(images, scale=scale)
+    # imgs = cvt_tkimages(images, scale=scale)
+    cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
     cnts = cvt_tkpolygons(contours, scale=scale)
-    canvas.pack()
-    canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
+    if len(cnts) != image_no:
+        # print("轮廓数据与图像数量不一致，程序退出")
+        pop_err_win(f"轮廓数据与图像数量不一致\n轮廓数据数量为{len(cnts)}\n图像数量为{image_no}", font=("微软雅黑", 10, "bold"), winsize=(300, 80))
+    print("完成，正在启动编辑器...")
+    # canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
+    canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
     curr_contour = Contour(canvas, cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no])
     
-    def change_image(next_no):
+    def change_image(new_no):
         global current_image_no
         global curr_contour
         (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
-        current_image_no = next_no + current_image_no
+        current_image_no = new_no
         if current_image_no >= image_no:
             current_image_no = 0
         if current_image_no < 0:
             current_image_no = image_no - 1
-        root.title(f"标签编辑器 - {current_image_no + 1} / {image_no}")
+        root.title(f"标签编辑器 - {current_image_no} / {image_no - 1}")
         canvas.delete("all")
-        canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
+        # canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
+        cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
+        canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
         curr_contour = Contour(canvas, cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no])
+    
+    def jump_image():
+        global jump_num
+        new_image_no = jump_num.get()
+        if new_image_no.isdigit():
+            new_image_no = int(new_image_no)
+            if new_image_no >= image_no:
+                new_image_no = image_no - 1
+                jump_num.delete(0, "end")
+                jump_num.insert(0, str(new_image_no))
+            if new_image_no < 0:
+                new_image_no = 0
+                jump_num.delete(0, "end")
+                jump_num.insert(0, str(new_image_no))
+            change_image(new_image_no)
 
-    prev_image_button.config(command=lambda:change_image(-1))
-    next_image_button.config(command=lambda:change_image(1))
+    jump_button.config(command=lambda:jump_image())
+    prev_image_button.config(command=lambda:change_image(current_image_no-1))
+    next_image_button.config(command=lambda:change_image(current_image_no+1))
     save_button.config(command=lambda:save_new_cnts(scale=scale))
-    root.bind("<Left>", lambda e:change_image(-1))
-    root.bind("<Right>", lambda e:change_image(1))
+    root.bind("<Left>", lambda e:change_image(current_image_no-1))
+    root.bind("<Right>", lambda e:change_image(current_image_no+1))
     root.bind("<Control-s>", lambda e:save_new_cnts(scale=scale))
     root.bind("<Control-S>", lambda e:save_new_cnts(scale=scale))
+    root.bind("<Return>", lambda e:jump_image())
     root.mainloop()
