@@ -14,6 +14,10 @@ class Contour:
         self.last_y = None
         self.selected = None
         self.multiselected = []
+        self.select_box = None
+        self.node_selected_flag = False
+        self.polygon_selected_flag = False
+        self.tag_id = 0
 
         self.points = points
 
@@ -22,6 +26,10 @@ class Contour:
         canvas.tag_bind(self.polygon, '<ButtonPress-1>',   lambda event, tag="polygon": self.on_press_tag(event, 0, tag))
         canvas.tag_bind(self.polygon, '<ButtonRelease-1>', lambda event, tag="polygon": self.on_release_tag(event, 0, tag))
         canvas.tag_bind(self.polygon, '<B1-Motion>', self.on_move_polygon)
+        canvas.tag_bind(self.polygon, '<Alt-ButtonPress-1>', self.do_nothing)
+        # canvas.tag_bind(self.polygon, '<Alt-ButtonRelease-1>', self.do_nothing)
+        canvas.tag_bind(self.polygon, '<Control-ButtonPress-1>', self.do_nothing)
+        # canvas.tag_bind(self.polygon, '<Control-ButtonRelease-1>', self.do_nothing)
 
         # nodes - red rectangles
         self.nodes = []
@@ -32,10 +40,16 @@ class Contour:
             canvas.tag_bind(node, '<ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag(event, number, tag))
             canvas.tag_bind(node, '<ButtonRelease-1>', lambda event, number=number, tag=f"node{number}": self.on_release_tag(event, number, tag))
             canvas.tag_bind(node, '<Control-ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag_multi(event, number, tag))
-            canvas.tag_bind(node, '<Control-ButtonRelease-1>', self.do_nothing)
+            # canvas.tag_bind(node, '<Control-ButtonRelease-1>', self.do_nothing)
+            canvas.tag_bind(node, '<Alt-ButtonPress-1>', self.do_nothing)
+            # canvas.tag_bind(node, '<Alt-ButtonRelease-1>', self.do_nothing)
             canvas.tag_bind(node, '<B1-Motion>', lambda event, number=number: self.on_move_node(event, number))
-            canvas.tag_bind(node, '<Control-B1-Motion>', self.do_nothing)
+            # canvas.tag_bind(node, '<Control-B1-Motion>', self.do_nothing)
 
+        canvas.bind('<B1-Motion>', self.do_nothing2)
+        canvas.bind('<Alt-ButtonPress-1>', lambda event:self.on_press_select(event))
+        canvas.bind('<Alt-ButtonRelease-1>', lambda event:self.on_release_select(event))
+        canvas.bind('<Alt-B1-Motion>', lambda event:self.on_move_select(event))
         canvas.bind_all('<ButtonPress-3>', self.on_press_tag_multi_cancel)
         # 绑定大小写z键来undo
         canvas.bind_all("<Control-z>", self.undo)
@@ -58,22 +72,29 @@ class Contour:
         if self.multiselected:
             self.undo_stack.append({"selected": self.multiselected.copy(), "prev_x": event.x, "prev_y": event.y})
             self.undo_stack[-1]["item"] = "multinode"
+            self.node_selected_flag = True
         else:
             self.undo_stack.append({"selected": self.selected, "prev_x": event.x, "prev_y": event.y})
             if number == 0:
                 self.undo_stack[-1]["item"] = "polygon"
+                self.polygon_selected_flag = True
             else:
                 self.undo_stack[-1]["item"] = "node"
-        # print(f"undo stack index {len(self.undo_stack)-1}: {self.undo_stack[-1]}")
+                self.node_selected_flag = True
+        self.undo_stack[-1]["tag_id"] = self.tag_id
+        self.tag_id += 1
 
     def on_release_tag(self, event, number, tag):
-        self.selected = None
-        self.last_x = None
-        self.last_y = None
-        self.undo_stack[-1]["curr_x"] = event.x
-        self.undo_stack[-1]["curr_y"] = event.y
-        # print(f"release undo stack index {len(self.undo_stack)-1}: {self.undo_stack[-1]}")
-    
+        if not self.select_box:
+            if self.node_selected_flag or self.polygon_selected_flag:
+                self.selected = None
+                self.last_x = None
+                self.last_y = None
+                self.undo_stack[-1]["curr_x"] = event.x
+                self.undo_stack[-1]["curr_y"] = event.y
+            self.node_selected_flag = False
+            self.polygon_selected_flag = False
+
     def on_press_tag_multi(self, event, number, tag):
         if tag not in self.multiselected:
             self.multiselected.append(tag)
@@ -100,8 +121,15 @@ class Contour:
     def do_nothing(self, e):
         pass
 
+    def do_nothing2(self, e):
+        if self.select_box:
+            canvas.delete(self.select_box)
+            self.select_box = None
+
     def on_move_node(self, event, number):
         '''move single/multi node in polygon'''
+        if not self.node_selected_flag:
+            return
         if self.multiselected:
             dx = event.x - self.last_x
             dy = event.y - self.last_y
@@ -131,6 +159,8 @@ class Contour:
 
     def on_move_polygon(self, event):
         '''move polygon and red rectangles in nodes'''
+        if not self.polygon_selected_flag:
+            return
         if self.selected:
             dx = event.x - self.last_x
             dy = event.y - self.last_y
@@ -218,6 +248,46 @@ class Contour:
 
         else:
             print("redo stack is empty")
+    
+    def on_press_select(self, event):
+        if self.multiselected:
+            for item in self.multiselected:
+                c = canvas.coords(item)
+                c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
+                canvas.coords(item, c)
+                canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+            self.multiselected = []
+        self.last_x = event.x
+        self.last_y = event.y
+        self.select_box = canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='white', width=2)
+
+    def on_move_select(self, event):
+        if self.select_box:
+            canvas.coords(self.select_box, [self.last_x, self.last_y, event.x, event.y])
+            enclosed_nodes = canvas.find_enclosed(self.last_x, self.last_y, event.x, event.y)
+            enclosed_nodes = [canvas.gettags(item)[0] for item in enclosed_nodes]
+            if 'polygon' in enclosed_nodes:
+                enclosed_nodes.remove('polygon')
+            for item in enclosed_nodes:
+                if item not in self.multiselected:
+                    self.multiselected.append(item)
+                    c = canvas.coords(item)
+                    c[0], c[1], c[2], c[3] = c[0]-4, c[1]-4, c[2]+4, c[3]+4
+                    canvas.coords(item, c)
+                    canvas.itemconfig(item, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
+            for item in self.multiselected:
+                if item not in enclosed_nodes:
+                    c = canvas.coords(item)
+                    c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
+                    canvas.coords(item, c)
+                    canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+                    self.multiselected.remove(item)
+
+    def on_release_select(self, event):
+        self.last_x = None
+        self.last_y = None
+        canvas.delete(self.select_box)
+        self.select_box = None
     
     def cache_result(self):
         return (self.points, self.undo_stack, self.redo_stack)
