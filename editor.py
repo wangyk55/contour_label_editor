@@ -13,6 +13,7 @@ class Contour:
         self.last_x = None
         self.last_y = None
         self.selected = None
+        self.multiselected = []
 
         self.points = points
 
@@ -30,8 +31,12 @@ class Contour:
             self.nodes.append(node)
             canvas.tag_bind(node, '<ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag(event, number, tag))
             canvas.tag_bind(node, '<ButtonRelease-1>', lambda event, number=number, tag=f"node{number}": self.on_release_tag(event, number, tag))
+            canvas.tag_bind(node, '<Control-ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag_multi(event, number, tag))
+            canvas.tag_bind(node, '<Control-ButtonRelease-1>', self.do_nothing)
             canvas.tag_bind(node, '<B1-Motion>', lambda event, number=number: self.on_move_node(event, number))
+            canvas.tag_bind(node, '<Control-B1-Motion>', self.do_nothing)
 
+        canvas.bind_all('<ButtonPress-3>', self.on_press_tag_multi_cancel)
         # 绑定大小写z键来undo
         canvas.bind_all("<Control-z>", self.undo)
         canvas.bind_all("<Control-Z>", self.undo)
@@ -40,14 +45,26 @@ class Contour:
         canvas.bind_all("<Control-Y>", self.redo)
     
     def on_press_tag(self, event, number, tag):
+        if tag not in self.multiselected:
+            for item in self.multiselected:
+                c = canvas.coords(item)
+                c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
+                canvas.coords(item, c)
+                canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+            self.multiselected = []
         self.selected = tag
         self.last_x = event.x
         self.last_y = event.y
-        self.undo_stack.append({"selected": self.selected, "prev_x": event.x, "prev_y": event.y})
-        if number == 0:
-            self.undo_stack[-1]["item"] = "polygon"
+        if self.multiselected:
+            self.undo_stack.append({"selected": self.multiselected.copy(), "prev_x": event.x, "prev_y": event.y})
+            self.undo_stack[-1]["item"] = "multinode"
         else:
-            self.undo_stack[-1]["item"] = "node"
+            self.undo_stack.append({"selected": self.selected, "prev_x": event.x, "prev_y": event.y})
+            if number == 0:
+                self.undo_stack[-1]["item"] = "polygon"
+            else:
+                self.undo_stack[-1]["item"] = "node"
+        # print(f"undo stack index {len(self.undo_stack)-1}: {self.undo_stack[-1]}")
 
     def on_release_tag(self, event, number, tag):
         self.selected = None
@@ -55,22 +72,62 @@ class Contour:
         self.last_y = None
         self.undo_stack[-1]["curr_x"] = event.x
         self.undo_stack[-1]["curr_y"] = event.y
+        # print(f"release undo stack index {len(self.undo_stack)-1}: {self.undo_stack[-1]}")
+    
+    def on_press_tag_multi(self, event, number, tag):
+        if tag not in self.multiselected:
+            self.multiselected.append(tag)
+            c = canvas.coords(tag)
+            c[0], c[1], c[2], c[3] = c[0]-4, c[1]-4, c[2]+4, c[3]+4
+            canvas.coords(tag, c)
+            canvas.itemconfig(tag, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
+        else:
+            c = canvas.coords(tag)
+            c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
+            canvas.coords(tag, c)
+            canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+            self.multiselected.remove(tag)
+
+    def on_press_tag_multi_cancel(self, event):
+        if self.multiselected:
+            for tag in self.multiselected:
+                c = canvas.coords(tag)
+                c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
+                canvas.coords(tag, c)
+                canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+            self.multiselected = []
+    
+    def do_nothing(self, e):
+        pass
 
     def on_move_node(self, event, number):
-        '''move single node in polygon'''
-        if self.selected:
+        '''move single/multi node in polygon'''
+        if self.multiselected:
+            dx = event.x - self.last_x
+            dy = event.y - self.last_y
+
+            for tag in self.multiselected:
+                op_num = int(tag[4:])
+                canvas.move(tag, dx, dy)
+                self.points[op_num][0] += dx
+                self.points[op_num][1] += dy
+
+        elif self.selected:
             dx = event.x - self.last_x
             dy = event.y - self.last_y
 
             canvas.move(self.selected, dx, dy)
             self.points[number][0] += dx
             self.points[number][1] += dy
+        
+        else:
+            return
 
-            coords = sum(self.points, [])
-            canvas.coords(self.polygon, coords)
+        coords = sum(self.points, [])
+        canvas.coords(self.polygon, coords)
 
-            self.last_x = event.x
-            self.last_y = event.y
+        self.last_x = event.x
+        self.last_y = event.y
 
     def on_move_polygon(self, event):
         '''move polygon and red rectangles in nodes'''
@@ -81,7 +138,7 @@ class Contour:
             # move polygon
             canvas.move(self.selected, dx, dy)
 
-            # move red nodes 
+            # move all nodes 
             for item in self.nodes:
                 canvas.move(item, dx, dy)
 
@@ -99,19 +156,31 @@ class Contour:
             self.redo_stack.append(op)
             dx = op["prev_x"] - op["curr_x"]
             dy = op["prev_y"] - op["curr_y"]
-            canvas.move(op["selected"], dx, dy)
-            if op["item"] == "polygon":
+            if op["item"] == "multinode":
+                for item in op["selected"]:
+                    canvas.move(item, dx, dy)
+                    op_num = int(item[4:])
+                    self.points[op_num][0] += dx
+                    self.points[op_num][1] += dy
+                    coords = sum(self.points, [])
+                    canvas.coords(self.polygon, coords)
+
+            elif op["item"] == "polygon":
+                canvas.move(op["selected"], dx, dy)
                 for item in self.nodes:
                     canvas.move(item, dx, dy)
                 for p in self.points:
                     p[0] += dx
                     p[1] += dy
-            else:
+
+            elif op["item"] == "node":
+                canvas.move(op["selected"], dx, dy)
                 op_num = int(op["selected"][4:])
                 self.points[op_num][0] += dx
                 self.points[op_num][1] += dy
                 coords = sum(self.points, [])
                 canvas.coords(self.polygon, coords)
+
         else:
             print("undo stack is empty")
 
@@ -122,19 +191,31 @@ class Contour:
             self.undo_stack.append(op)
             dx = op["curr_x"] - op["prev_x"]
             dy = op["curr_y"] - op["prev_y"]
-            canvas.move(op["selected"], dx, dy)
-            if op["item"] == "polygon":
+            if op["item"] == "multinode":
+                for item in op["selected"]:
+                    canvas.move(item, dx, dy)
+                    op_num = int(item[4:])
+                    self.points[op_num][0] += dx
+                    self.points[op_num][1] += dy
+                    coords = sum(self.points, [])
+                    canvas.coords(self.polygon, coords)
+
+            elif op["item"] == "polygon":
+                canvas.move(op["selected"], dx, dy)
                 for item in self.nodes:
                     canvas.move(item, dx, dy)
                 for p in self.points:
                     p[0] += dx
                     p[1] += dy
+
             else:
+                canvas.move(op["selected"], dx, dy)
                 op_num = int(op["selected"][4:])
                 self.points[op_num][0] += dx
                 self.points[op_num][1] += dy
                 coords = sum(self.points, [])
                 canvas.coords(self.polygon, coords)
+
         else:
             print("redo stack is empty")
     
@@ -208,7 +289,6 @@ def save_new_cnts(scale):
         new_cnts = new_cnts // scale
         np.save(file, new_cnts.astype(np.float64))
         file.close()
-
 
 def pop_startup_window(root):
     def cancel():
@@ -333,7 +413,6 @@ if __name__ == "__main__":
     cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
     cnts = cvt_tkpolygons(contours, scale=scale)
     if len(cnts) != image_no:
-        # print("轮廓数据与图像数量不一致，程序退出")
         pop_err_win(f"轮廓数据与图像数量不一致\n轮廓数据数量为{len(cnts)}\n图像数量为{image_no}", font=("微软雅黑", 10, "bold"), winsize=(300, 80))
     print("完成，正在启动编辑器...")
     canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
