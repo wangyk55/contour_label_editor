@@ -6,14 +6,6 @@ from PIL import Image, ImageTk
 from tkinter import filedialog
 
 
-class Point:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-    
-    def coord(self):
-        return [self.x, self.y]
-
 class Contour:
     def __init__(self, canvas, points, undo_stack=[], redo_stack=[]):
         self.undo_stack = undo_stack
@@ -22,19 +14,17 @@ class Contour:
         self.last_y = None
         self.selected = None
 
-        self.points = []
-        for p in points:
-            self.points.append(Point(p[0], p[1]))
+        self.points = points
 
         # polygon
-        self.polygon = canvas.create_polygon([p.coord() for p in self.points], outline="mediumseagreen", fill="", width=3, tags="polygon", activeoutline='lime', activefill='')
+        self.polygon = canvas.create_polygon(self.points, outline="mediumseagreen", fill="", width=3, tags="polygon", activeoutline='lime', activefill='')
         canvas.tag_bind(self.polygon, '<ButtonPress-1>',   lambda event, tag="polygon": self.on_press_tag(event, 0, tag))
         canvas.tag_bind(self.polygon, '<ButtonRelease-1>', lambda event, tag="polygon": self.on_release_tag(event, 0, tag))
         canvas.tag_bind(self.polygon, '<B1-Motion>', self.on_move_polygon)
 
         # nodes - red rectangles
         self.nodes = []
-        for number, point in enumerate([p.coord() for p in self.points]):
+        for number, point in enumerate(self.points):
             x, y = point
             node = canvas.create_rectangle((x, y, x, y), outline='red', fill='red', width=4, tags=f"node{number}", activeoutline='yellow', activefill='yellow', activewidth=8)
             self.nodes.append(node)
@@ -53,7 +43,7 @@ class Contour:
         self.selected = tag
         self.last_x = event.x
         self.last_y = event.y
-        self.undo_stack.append({"selected": self.selected, "number": number, "prev_x": event.x, "prev_y": event.y})
+        self.undo_stack.append({"selected": self.selected, "prev_x": event.x, "prev_y": event.y})
         if number == 0:
             self.undo_stack[-1]["item"] = "polygon"
         else:
@@ -73,10 +63,10 @@ class Contour:
             dy = event.y - self.last_y
 
             canvas.move(self.selected, dx, dy)
-            self.points[number].x += dx
-            self.points[number].y += dy
+            self.points[number][0] += dx
+            self.points[number][1] += dy
 
-            coords = sum([p.coord() for p in self.points], [])
+            coords = sum(self.points, [])
             canvas.coords(self.polygon, coords)
 
             self.last_x = event.x
@@ -97,8 +87,8 @@ class Contour:
 
             # recalculate values in self.points
             for item in self.points:
-                item.x += dx
-                item.y += dy
+                item[0] += dx
+                item[1] += dy
 
             self.last_x = event.x
             self.last_y = event.y
@@ -114,12 +104,13 @@ class Contour:
                 for item in self.nodes:
                     canvas.move(item, dx, dy)
                 for p in self.points:
-                    p.x += dx
-                    p.y += dy
+                    p[0] += dx
+                    p[1] += dy
             else:
-                self.points[op["number"]].x += dx
-                self.points[op["number"]].y += dy
-                coords = sum([p.coord() for p in self.points], [])
+                op_num = int(op["selected"][4:])
+                self.points[op_num][0] += dx
+                self.points[op_num][1] += dy
+                coords = sum(self.points, [])
                 canvas.coords(self.polygon, coords)
         else:
             print("undo stack is empty")
@@ -136,19 +127,20 @@ class Contour:
                 for item in self.nodes:
                     canvas.move(item, dx, dy)
                 for p in self.points:
-                    p.x += dx
-                    p.y += dy
+                    p[0] += dx
+                    p[1] += dy
             else:
-                self.points[op["number"]].x += dx
-                self.points[op["number"]].y += dy
-                coords = sum([p.coord() for p in self.points], [])
+                op_num = int(op["selected"][4:])
+                self.points[op_num][0] += dx
+                self.points[op_num][1] += dy
+                coords = sum(self.points, [])
                 canvas.coords(self.polygon, coords)
         else:
             print("redo stack is empty")
     
     def cache_result(self):
-        return ([[p.x, p.y] for p in self.points], self.undo_stack, self.redo_stack)
-    
+        return (self.points, self.undo_stack, self.redo_stack)
+
 
 def pop_err_win(message, font, winsize=(260, 60)):
     global root
@@ -206,65 +198,6 @@ def save_new_cnts(scale):
     global undo_stack
     global redo_stack
 
-    # def cancel():
-    #     ask_win.destroy()
-    
-    # def saveit(file_name):
-    #     (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
-    #     new_cnts = cnts.copy()
-    #     new_cnts = np.array(new_cnts)
-    #     new_cnts = new_cnts.transpose(1, 2, 0)
-    #     new_cnts = new_cnts[:, ::-1, :]
-    #     new_cnts = new_cnts // scale
-    #     np.save(file_name, new_cnts.astype(np.float64))
-    #     ask_win.destroy()
-    
-    # def select_path(file_nameVar):
-    #     filename = filedialog.asksaveasfile(initialdir=".", initialfile=file_nameVar.get(), filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径")
-    #     if filename:
-    #         file_nameVar.set(filename)
-
-    # root_x = root.winfo_x()
-    # root_y = root.winfo_y()
-    # root_width = root.winfo_width()
-    # root_height = root.winfo_height()
-    # ask_win_x = root_x + root_width // 2 - 150
-    # ask_win_y = root_y + root_height // 2 - 50
-
-    # ask_win = tk.Toplevel(root)
-    # ask_win.title("保存")
-    # ask_win.geometry(f"300x100+{ask_win_x}+{ask_win_y}")
-    # ask_win.resizable(False, False)
-    # ask_win.attributes("-topmost", True)
-    # ask_win.grab_set()
-    # ask_win.focus_set()
-    # ask_win.transient(root)
-    # ask_win.protocol("WM_DELETE_WINDOW", lambda: cancel())
-
-    # tk.Label(ask_win, text="选择保存路径").pack()
-
-    # save_file_frame = tk.Frame(ask_win)
-    # file_name = tk.StringVar(save_file_frame, value=f"ACDC_RV_contour_200_new.npy")
-    # save_file_button = tk.Button(save_file_frame, text="选择路径", height=0, width=7)
-    # tk.Entry(save_file_frame, textvariable=file_name, width=20).pack(side=tk.LEFT)
-    # save_file_button.pack(side=tk.RIGHT)
-    # save_file_frame.pack()
-
-    # button_frame = tk.Frame(ask_win)
-    # place_holder = tk.Label(button_frame, text=" " * 7)
-    # button_frame.pack()
-
-    # save_button = tk.Button(button_frame, text="保存")
-    # cancel_button = tk.Button(button_frame, text="取消")
-
-    # save_button.pack(side=tk.LEFT)
-    # place_holder.pack(side=tk.LEFT)
-    # cancel_button.pack(side=tk.RIGHT)
-
-    # save_button.config(command=lambda:saveit(file_name.get()))
-    # cancel_button.config(command=lambda:cancel())
-    # save_file_button.config(command=lambda:select_path(file_name))
-    # ask_win.wait_window()
     file = filedialog.asksaveasfile(initialdir=".", initialfile="ACDC_RV_contour_200_new.npy", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径", mode="wb")
     if file:
         (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
@@ -397,14 +330,12 @@ if __name__ == "__main__":
 
 
     print("正在转换数据...")
-    # imgs = cvt_tkimages(images, scale=scale)
     cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
     cnts = cvt_tkpolygons(contours, scale=scale)
     if len(cnts) != image_no:
         # print("轮廓数据与图像数量不一致，程序退出")
         pop_err_win(f"轮廓数据与图像数量不一致\n轮廓数据数量为{len(cnts)}\n图像数量为{image_no}", font=("微软雅黑", 10, "bold"), winsize=(300, 80))
     print("完成，正在启动编辑器...")
-    # canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
     canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
     curr_contour = Contour(canvas, cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no])
     
@@ -419,7 +350,6 @@ if __name__ == "__main__":
             current_image_no = image_no - 1
         root.title(f"标签编辑器 - {current_image_no} / {image_no - 1}")
         canvas.delete("all")
-        # canvas.create_image(0, 0, anchor=tk.NW, image=imgs[current_image_no])
         cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
         canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
         curr_contour = Contour(canvas, cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no])
