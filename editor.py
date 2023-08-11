@@ -31,7 +31,7 @@ class Contour:
         canvas.tag_bind(self.polygon, '<Control-ButtonPress-1>', self.do_nothing)
         # canvas.tag_bind(self.polygon, '<Control-ButtonRelease-1>', self.do_nothing)
 
-        # nodes - red rectangles
+        # nodes
         self.nodes = []
         for number, point in enumerate(self.points):
             x, y = point
@@ -75,7 +75,7 @@ class Contour:
             self.node_selected_flag = True
         else:
             self.undo_stack.append({"selected": self.selected, "prev_x": event.x, "prev_y": event.y})
-            if number == 0:
+            if tag == "polygon":
                 self.undo_stack[-1]["item"] = "polygon"
                 self.polygon_selected_flag = True
             else:
@@ -339,6 +339,7 @@ def cvt_tkpolygons(cnts, scale):
     cnts = cnts * scale
     cnts = cnts[:, ::-1, :]
     cnts = cnts.transpose(2, 0, 1)
+    cnts = cnts[:, 0:-1, :] # 观察发现最后一个点和第一个点重合 去除减少计算量
     return cnts.tolist()
 
 def save_new_cnts(scale):
@@ -354,6 +355,7 @@ def save_new_cnts(scale):
         (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
         new_cnts = cnts.copy()
         new_cnts = np.array(new_cnts)
+        new_cnts = np.concatenate((new_cnts, np.expand_dims(new_cnts[:, 0, :], axis=1)), axis=1) # 把去除的那个点加回来保证格式与原来的相同
         new_cnts = new_cnts.transpose(1, 2, 0)
         new_cnts = new_cnts[:, ::-1, :]
         new_cnts = new_cnts // scale
