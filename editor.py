@@ -69,6 +69,7 @@ class Contour:
         self.selected = tag
         self.last_x = event.x
         self.last_y = event.y
+        self.redo_stack = []
         if self.multiselected:
             self.undo_stack.append({"selected": self.multiselected.copy(), "prev_x": event.x, "prev_y": event.y})
             self.undo_stack[-1]["item"] = "multinode"
