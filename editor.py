@@ -17,54 +17,56 @@ class Contour:
         self.select_box = None
         self.node_selected_flag = False
         self.polygon_selected_flag = False
+        self.canvas = canvas
         self.tag_id = 0
 
         self.points = points
 
         # polygon
-        self.polygon = canvas.create_polygon(self.points, outline="mediumseagreen", fill="", width=3, tags="polygon", activeoutline='lime', activefill='')
-        canvas.tag_bind(self.polygon, '<ButtonPress-1>',   lambda event, tag="polygon": self.on_press_tag(event, 0, tag))
-        canvas.tag_bind(self.polygon, '<ButtonRelease-1>', lambda event, tag="polygon": self.on_release_tag(event, 0, tag))
-        canvas.tag_bind(self.polygon, '<B1-Motion>', self.on_move_polygon)
-        canvas.tag_bind(self.polygon, '<Alt-ButtonPress-1>', self.do_nothing)
-        # canvas.tag_bind(self.polygon, '<Alt-ButtonRelease-1>', self.do_nothing)
-        canvas.tag_bind(self.polygon, '<Control-ButtonPress-1>', self.do_nothing)
-        # canvas.tag_bind(self.polygon, '<Control-ButtonRelease-1>', self.do_nothing)
+        self.polygon = self.canvas.create_polygon(self.points, outline="mediumseagreen", fill="", width=3, tags="polygon", activeoutline='lime', activefill='')
+        self.canvas.tag_bind(self.polygon, '<ButtonPress-1>',   lambda event, tag="polygon": self.on_press_tag(event, 0, tag))
+        self.canvas.tag_bind(self.polygon, '<ButtonRelease-1>', lambda event, tag="polygon": self.on_release_tag(event, 0, tag))
+        self.canvas.tag_bind(self.polygon, '<B1-Motion>', self.on_move_polygon)
+        self.canvas.tag_bind(self.polygon, '<Alt-ButtonPress-1>', self.do_nothing)
+        # self.canvas.tag_bind(self.polygon, '<Alt-ButtonRelease-1>', self.do_nothing)
+        self.canvas.tag_bind(self.polygon, '<Control-ButtonPress-1>', self.do_nothing)
+        # self.canvas.tag_bind(self.polygon, '<Control-ButtonRelease-1>', self.do_nothing)
 
         # nodes
         self.nodes = []
         for number, point in enumerate(self.points):
             x, y = point
-            node = canvas.create_rectangle((x, y, x, y), outline='red', fill='red', width=4, tags=f"node{number}", activeoutline='yellow', activefill='yellow', activewidth=8)
+            node = self.canvas.create_rectangle((x, y, x, y), outline='red', fill='red', width=4, tags=f"node{number}", activeoutline='yellow', activefill='yellow', activewidth=8)
             self.nodes.append(node)
-            canvas.tag_bind(node, '<ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag(event, number, tag))
-            canvas.tag_bind(node, '<ButtonRelease-1>', lambda event, number=number, tag=f"node{number}": self.on_release_tag(event, number, tag))
-            canvas.tag_bind(node, '<Control-ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag_multi(event, number, tag))
-            # canvas.tag_bind(node, '<Control-ButtonRelease-1>', self.do_nothing)
-            canvas.tag_bind(node, '<Alt-ButtonPress-1>', self.do_nothing)
-            # canvas.tag_bind(node, '<Alt-ButtonRelease-1>', self.do_nothing)
-            canvas.tag_bind(node, '<B1-Motion>', lambda event, number=number: self.on_move_node(event, number))
-            # canvas.tag_bind(node, '<Control-B1-Motion>', self.do_nothing)
+            self.canvas.tag_bind(node, '<ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag(event, number, tag))
+            self.canvas.tag_bind(node, '<ButtonRelease-1>', lambda event, number=number, tag=f"node{number}": self.on_release_tag(event, number, tag))
+            self.canvas.tag_bind(node, '<Control-ButtonPress-1>',   lambda event, number=number, tag=f"node{number}": self.on_press_tag_multi(event, number, tag))
+            # self.canvas.tag_bind(node, '<Control-ButtonRelease-1>', self.do_nothing)
+            self.canvas.tag_bind(node, '<Alt-ButtonPress-1>', self.do_nothing)
+            # self.canvas.tag_bind(node, '<Alt-ButtonRelease-1>', self.do_nothing)
+            self.canvas.tag_bind(node, '<B1-Motion>', lambda event, number=number: self.on_move_node(event, number))
+            # self.canvas.tag_bind(node, '<Control-B1-Motion>', self.do_nothing)
 
-        canvas.bind('<B1-Motion>', self.do_nothing2)
-        canvas.bind('<Alt-ButtonPress-1>', lambda event:self.on_press_select(event))
-        canvas.bind('<Alt-ButtonRelease-1>', lambda event:self.on_release_select(event))
-        canvas.bind('<Alt-B1-Motion>', lambda event:self.on_move_select(event))
-        canvas.bind_all('<ButtonPress-3>', self.on_press_tag_multi_cancel)
+        self.canvas.bind('<B1-Motion>', self.do_nothing2)
+        self.canvas.bind('<Alt-ButtonPress-1>', lambda event:self.on_press_select(event))
+        self.canvas.bind('<Alt-ButtonRelease-1>', lambda event:self.on_release_select(event))
+        self.canvas.bind('<Alt-B1-Motion>', lambda event:self.on_move_select(event))
+        self.canvas.bind('<ButtonPress-1>', self.root_grab_focus)
+        self.canvas.bind('<ButtonPress-3>', self.on_press_tag_multi_cancel)
         # 绑定大小写z键来undo
-        canvas.bind_all("<Control-z>", self.undo)
-        canvas.bind_all("<Control-Z>", self.undo)
+        self.canvas.bind_all("<Control-z>", self.undo)
+        self.canvas.bind_all("<Control-Z>", self.undo)
         # 绑定大小写y键来redo
-        canvas.bind_all("<Control-y>", self.redo)
-        canvas.bind_all("<Control-Y>", self.redo)
+        self.canvas.bind_all("<Control-y>", self.redo)
+        self.canvas.bind_all("<Control-Y>", self.redo)
     
     def on_press_tag(self, event, number, tag):
         if tag not in self.multiselected:
             for item in self.multiselected:
-                c = canvas.coords(item)
+                c = self.canvas.coords(item)
                 c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
-                canvas.coords(item, c)
-                canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+                self.canvas.coords(item, c)
+                self.canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
             self.multiselected = []
         self.selected = tag
         self.last_x = event.x
@@ -99,24 +101,24 @@ class Contour:
     def on_press_tag_multi(self, event, number, tag):
         if tag not in self.multiselected:
             self.multiselected.append(tag)
-            c = canvas.coords(tag)
+            c = self.canvas.coords(tag)
             c[0], c[1], c[2], c[3] = c[0]-4, c[1]-4, c[2]+4, c[3]+4
-            canvas.coords(tag, c)
-            canvas.itemconfig(tag, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
+            self.canvas.coords(tag, c)
+            self.canvas.itemconfig(tag, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
         else:
-            c = canvas.coords(tag)
+            c = self.canvas.coords(tag)
             c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
-            canvas.coords(tag, c)
-            canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+            self.canvas.coords(tag, c)
+            self.canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
             self.multiselected.remove(tag)
 
     def on_press_tag_multi_cancel(self, event):
         if self.multiselected:
             for tag in self.multiselected:
-                c = canvas.coords(tag)
+                c = self.canvas.coords(tag)
                 c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
-                canvas.coords(tag, c)
-                canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+                self.canvas.coords(tag, c)
+                self.canvas.itemconfig(tag, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
             self.multiselected = []
     
     def do_nothing(self, e):
@@ -124,8 +126,11 @@ class Contour:
 
     def do_nothing2(self, e):
         if self.select_box:
-            canvas.delete(self.select_box)
+            self.canvas.delete(self.select_box)
             self.select_box = None
+
+    def root_grab_focus(self, e):
+        self.canvas.master.focus_set()
 
     def on_move_node(self, event, number):
         '''move single/multi node in polygon'''
@@ -137,7 +142,7 @@ class Contour:
 
             for tag in self.multiselected:
                 op_num = int(tag[4:])
-                canvas.move(tag, dx, dy)
+                self.canvas.move(tag, dx, dy)
                 self.points[op_num][0] += dx
                 self.points[op_num][1] += dy
 
@@ -145,7 +150,7 @@ class Contour:
             dx = event.x - self.last_x
             dy = event.y - self.last_y
 
-            canvas.move(self.selected, dx, dy)
+            self.canvas.move(self.selected, dx, dy)
             self.points[number][0] += dx
             self.points[number][1] += dy
         
@@ -153,7 +158,7 @@ class Contour:
             return
 
         coords = sum(self.points, [])
-        canvas.coords(self.polygon, coords)
+        self.canvas.coords(self.polygon, coords)
 
         self.last_x = event.x
         self.last_y = event.y
@@ -167,11 +172,11 @@ class Contour:
             dy = event.y - self.last_y
 
             # move polygon
-            canvas.move(self.selected, dx, dy)
+            self.canvas.move(self.selected, dx, dy)
 
             # move all nodes 
             for item in self.nodes:
-                canvas.move(item, dx, dy)
+                self.canvas.move(item, dx, dy)
 
             # recalculate values in self.points
             for item in self.points:
@@ -189,28 +194,28 @@ class Contour:
             dy = op["prev_y"] - op["curr_y"]
             if op["item"] == "multinode":
                 for item in op["selected"]:
-                    canvas.move(item, dx, dy)
+                    self.canvas.move(item, dx, dy)
                     op_num = int(item[4:])
                     self.points[op_num][0] += dx
                     self.points[op_num][1] += dy
                     coords = sum(self.points, [])
-                    canvas.coords(self.polygon, coords)
+                    self.canvas.coords(self.polygon, coords)
 
             elif op["item"] == "polygon":
-                canvas.move(op["selected"], dx, dy)
+                self.canvas.move(op["selected"], dx, dy)
                 for item in self.nodes:
-                    canvas.move(item, dx, dy)
+                    self.canvas.move(item, dx, dy)
                 for p in self.points:
                     p[0] += dx
                     p[1] += dy
 
             elif op["item"] == "node":
-                canvas.move(op["selected"], dx, dy)
+                self.canvas.move(op["selected"], dx, dy)
                 op_num = int(op["selected"][4:])
                 self.points[op_num][0] += dx
                 self.points[op_num][1] += dy
                 coords = sum(self.points, [])
-                canvas.coords(self.polygon, coords)
+                self.canvas.coords(self.polygon, coords)
 
         else:
             print("undo stack is empty")
@@ -224,28 +229,28 @@ class Contour:
             dy = op["curr_y"] - op["prev_y"]
             if op["item"] == "multinode":
                 for item in op["selected"]:
-                    canvas.move(item, dx, dy)
+                    self.canvas.move(item, dx, dy)
                     op_num = int(item[4:])
                     self.points[op_num][0] += dx
                     self.points[op_num][1] += dy
                     coords = sum(self.points, [])
-                    canvas.coords(self.polygon, coords)
+                    self.canvas.coords(self.polygon, coords)
 
             elif op["item"] == "polygon":
-                canvas.move(op["selected"], dx, dy)
+                self.canvas.move(op["selected"], dx, dy)
                 for item in self.nodes:
-                    canvas.move(item, dx, dy)
+                    self.canvas.move(item, dx, dy)
                 for p in self.points:
                     p[0] += dx
                     p[1] += dy
 
             else:
-                canvas.move(op["selected"], dx, dy)
+                self.canvas.move(op["selected"], dx, dy)
                 op_num = int(op["selected"][4:])
                 self.points[op_num][0] += dx
                 self.points[op_num][1] += dy
                 coords = sum(self.points, [])
-                canvas.coords(self.polygon, coords)
+                self.canvas.coords(self.polygon, coords)
 
         else:
             print("redo stack is empty")
@@ -253,41 +258,41 @@ class Contour:
     def on_press_select(self, event):
         if self.multiselected:
             for item in self.multiselected:
-                c = canvas.coords(item)
+                c = self.canvas.coords(item)
                 c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
-                canvas.coords(item, c)
-                canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+                self.canvas.coords(item, c)
+                self.canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
             self.multiselected = []
         self.last_x = event.x
         self.last_y = event.y
-        self.select_box = canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='white', width=2)
+        self.select_box = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline='white', width=2)
 
     def on_move_select(self, event):
         if self.select_box:
-            canvas.coords(self.select_box, [self.last_x, self.last_y, event.x, event.y])
-            enclosed_nodes = canvas.find_enclosed(self.last_x, self.last_y, event.x, event.y)
-            enclosed_nodes = [canvas.gettags(item)[0] for item in enclosed_nodes]
+            self.canvas.coords(self.select_box, [self.last_x, self.last_y, event.x, event.y])
+            enclosed_nodes = self.canvas.find_enclosed(self.last_x, self.last_y, event.x, event.y)
+            enclosed_nodes = [self.canvas.gettags(item)[0] for item in enclosed_nodes]
             if 'polygon' in enclosed_nodes:
                 enclosed_nodes.remove('polygon')
             for item in enclosed_nodes:
                 if item not in self.multiselected:
                     self.multiselected.append(item)
-                    c = canvas.coords(item)
+                    c = self.canvas.coords(item)
                     c[0], c[1], c[2], c[3] = c[0]-4, c[1]-4, c[2]+4, c[3]+4
-                    canvas.coords(item, c)
-                    canvas.itemconfig(item, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
+                    self.canvas.coords(item, c)
+                    self.canvas.itemconfig(item, outline='yellow', fill='blue', activeoutline='yellow', activefill='blue', width=1, activewidth=1)
             for item in self.multiselected:
                 if item not in enclosed_nodes:
-                    c = canvas.coords(item)
+                    c = self.canvas.coords(item)
                     c[0], c[1], c[2], c[3] = c[0]+4, c[1]+4, c[2]-4, c[3]-4
-                    canvas.coords(item, c)
-                    canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
+                    self.canvas.coords(item, c)
+                    self.canvas.itemconfig(item, outline='red', fill='red', activeoutline='yellow', activefill='yellow', width=4, activewidth=8)
                     self.multiselected.remove(item)
 
     def on_release_select(self, event):
         self.last_x = None
         self.last_y = None
-        canvas.delete(self.select_box)
+        self.canvas.delete(self.select_box)
         self.select_box = None
     
     def cache_result(self):
@@ -520,6 +525,8 @@ if __name__ == "__main__":
                 jump_num.delete(0, "end")
                 jump_num.insert(0, str(new_image_no))
             change_image(new_image_no)
+        else:
+            jump_num.delete(0, "end")
 
     jump_button.config(command=lambda:jump_image())
     prev_image_button.config(command=lambda:change_image(current_image_no-1))
