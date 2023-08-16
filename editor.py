@@ -60,6 +60,9 @@ class Contour:
         # 绑定大小写y键来redo
         self.canvas.bind_all("<Control-y>", self.redo)
         self.canvas.bind_all("<Control-Y>", self.redo)
+        # 按住tab键隐藏
+        self.canvas.bind_all("<KeyPress-Tab>", self.hide_polygon)
+        self.canvas.bind_all("<KeyRelease-Tab>", self.show_polygon)
     
     def on_press_tag(self, event, number, tag):
         if tag not in self.multiselected:
@@ -132,6 +135,16 @@ class Contour:
 
     def root_grab_focus(self, e):
         self.canvas.master.focus_set()
+    
+    def hide_polygon(self, e):
+        self.canvas.itemconfigure(self.polygon, state='hidden')
+        for item in self.nodes:
+            self.canvas.itemconfigure(item, state='hidden')
+    
+    def show_polygon(self, e):
+        self.canvas.itemconfigure(self.polygon, state='normal')
+        for item in self.nodes:
+            self.canvas.itemconfigure(item, state='normal')
 
     def on_move_node(self, event, number):
         '''move single/multi node in polygon'''
