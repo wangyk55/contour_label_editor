@@ -364,7 +364,7 @@ def save_new_cnts(scale):
         new_cnts = np.concatenate((new_cnts, np.expand_dims(new_cnts[:, 0, :], axis=1)), axis=1) # 把去除的那个点加回来保证格式与原来的相同
         new_cnts = new_cnts.transpose(1, 2, 0)
         new_cnts = new_cnts[:, ::-1, :]
-        new_cnts = new_cnts // scale
+        new_cnts = np.round(new_cnts / scale, decimals=0)
         np.save(file, new_cnts.astype(np.float64))
         file.close()
 
