@@ -2,9 +2,12 @@ import tkinter as tk
 
 import os
 import cv2
+import time
+import glob
+import shutil
 import numpy as np
 from PIL import Image, ImageTk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 
 class Contour:
@@ -134,6 +137,8 @@ class Contour:
             self.select_box = None
 
     def root_grab_focus(self, e):
+        global jump_num
+        jump_num.delete(0, "end")
         self.canvas.master.focus_set()
     
     def hide_polygon(self, e):
@@ -363,12 +368,13 @@ def cvt_tkpolygons(cnts, scale):
     return cnts.tolist()
 
 def save_new_cnts(scale, temp=False):
-    # global root
     global cnts
     global current_image_no
     global curr_contour
     global undo_stack
     global redo_stack
+    global img_file_name
+
     if not temp:
         file = filedialog.asksaveasfile(initialdir=".", initialfile="ACDC_RV_contour_200_new.npy", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径", mode="wb")
         if file:
@@ -381,6 +387,9 @@ def save_new_cnts(scale, temp=False):
             new_cnts = np.round(new_cnts / scale, decimals=0)
             np.save(file, new_cnts.astype(np.float64))
             file.close()
+            with open("history.txt", "w") as f:
+                f.write(f"{img_file_name}\n")
+                f.write(f"{file.name}\n")
     else:
         new_cnts = cnts.copy()
         new_cnts = np.array(new_cnts)
@@ -394,6 +403,11 @@ def save_new_cnts(scale, temp=False):
         np.save(f"~temp-{current_image_no}.npy", new_cnts.astype(np.float64))
 
 def pop_startup_window(root):
+    global img_file_name
+    global cnt_file_name
+    global current_image_no
+    global scale
+
     def cancel():
         img_file_nameVar.set(None)
         cnt_file_nameVar.set(None)
@@ -405,12 +419,36 @@ def pop_startup_window(root):
         global cnt_file_name
         img_file_name = img_entry.get()
         cnt_file_name = cnt_entry.get()
+        with open("history.txt", "w") as f:
+            f.write(f"{img_file_name}\n")
+            f.write(f"{cnt_file_name}\n")
         ask_filename_win.destroy()
-    
+
     def select_file(file_nameVar, title):
         filename = filedialog.askopenfilename(initialdir=".", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择{title}")
         if filename:
             file_nameVar.set(filename)
+
+    history_img_file_name = ""
+    history_cnt_file_name = ""
+
+    if os.path.exists("history.txt"):
+        with open("history.txt", "r") as f:
+            history_img_file_name = f.readline().strip()
+            history_cnt_file_name = f.readline().strip()
+
+    # 如果存在临时文件则询问是否恢复
+    temp_file_list = glob.glob("~temp-*.npy")
+    if len(temp_file_list) > 0:
+        if messagebox.askyesno("提示", "检测到存在临时文件，是否恢复？\n(若恢复, 则临时文件将保存为正式文件)\n(若不恢复, 则临时文件将被删除)"):
+            current_image_no = int(temp_file_list[0].split("-")[-1].split(".")[0])
+            restore_name = temp_file_list[0].replace("~temp-", f"{os.path.basename(history_cnt_file_name).split('.')[0]}_temp_").replace('.npy', f"(恢复于{time.strftime('%Y-%m-%d#%H-%M-%S', time.localtime())}).npy")
+            os.rename(temp_file_list[0], restore_name)
+            history_cnt_file_name = restore_name # 临时文件数量应该只有一个
+        else:
+            # 理论上来说应该只有一个temp file, 但是谁知道呢, 如果以后这个机制做好了可以优化掉这里的循环, 丑的要死
+            for file in temp_file_list:
+                os.remove(file)
 
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
@@ -428,8 +466,8 @@ def pop_startup_window(root):
     ask_filename_win.protocol("WM_DELETE_WINDOW", lambda: cancel())
 
     tk.Label(ask_filename_win, text="请输入文件路径").pack()
-    img_file_nameVar = tk.StringVar(ask_filename_win, value=f"ACDC_RV_images_128.npy")
-    cnt_file_nameVar = tk.StringVar(ask_filename_win, value=f"ACDC_RV_contour_200.npy")
+    img_file_nameVar = tk.StringVar(ask_filename_win, value=f"{history_img_file_name}")
+    cnt_file_nameVar = tk.StringVar(ask_filename_win, value=f"{history_cnt_file_name}")
     file_select_frame = tk.Frame(ask_filename_win)
     img_select_frame = tk.Frame(file_select_frame)
     cnt_select_frame = tk.Frame(file_select_frame)
@@ -439,6 +477,8 @@ def pop_startup_window(root):
     tk.Label(cnt_select_frame, text="轮廓npy").pack(side=tk.LEFT)
     cnt_entry = tk.Entry(cnt_select_frame, textvariable=cnt_file_nameVar, width=20)
     cnt_select_button = tk.Button(cnt_select_frame, text="选择文件", height=0, width=7)
+    img_entry.xview_moveto(1)
+    cnt_entry.xview_moveto(1)
     img_entry.pack(side=tk.LEFT)
     cnt_entry.pack(side=tk.LEFT)
     img_select_frame.pack()
@@ -471,6 +511,8 @@ if __name__ == "__main__":
 
     img_file_name = None
     cnt_file_name = None
+    current_image_no = 0
+    scale = 10
 
     root = tk.Tk()
     pop_startup_window(root)
@@ -483,13 +525,11 @@ if __name__ == "__main__":
 
     print("正在创建画板...")
     images_shape = images.shape
-    scale = 10
     canvas_width = images_shape[0] * scale
     canvas_height = images_shape[1] * scale
     image_no = images_shape[-1]
     undo_stack = [[] for _ in range(image_no)]
     redo_stack = [[] for _ in range(image_no)]
-    current_image_no = 0
     root.title(f"标签编辑器 - {current_image_no} / {image_no - 1}")
     canvas = tk.Canvas(root, bg="white", width=canvas_width, height=canvas_height)
 
@@ -536,7 +576,7 @@ if __name__ == "__main__":
         cvt_single_tkimage(images[:, :, :, current_image_no], scale=scale)
         canvas.create_image(0, 0, anchor=tk.NW, image=single_img)
         curr_contour = Contour(canvas, cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no])
-    
+
     def jump_image():
         global jump_num
         new_image_no = jump_num.get()
