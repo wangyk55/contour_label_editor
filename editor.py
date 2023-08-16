@@ -1,5 +1,6 @@
 import tkinter as tk
 
+import os
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
@@ -348,25 +349,36 @@ def cvt_tkpolygons(cnts, scale):
     cnts = cnts[:, 0:-1, :] # 观察发现最后一个点和第一个点重合 去除减少计算量
     return cnts.tolist()
 
-def save_new_cnts(scale):
+def save_new_cnts(scale, temp=False):
     # global root
     global cnts
     global current_image_no
     global curr_contour
     global undo_stack
     global redo_stack
-
-    file = filedialog.asksaveasfile(initialdir=".", initialfile="ACDC_RV_contour_200_new.npy", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径", mode="wb")
-    if file:
-        (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
+    if not temp:
+        file = filedialog.asksaveasfile(initialdir=".", initialfile="ACDC_RV_contour_200_new.npy", filetypes=[("npy文件", ".npy"), ("所有文件", ".*")], defaultextension=".npy", title=f"选择保存路径", mode="wb")
+        if file:
+            (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
+            new_cnts = cnts.copy()
+            new_cnts = np.array(new_cnts)
+            new_cnts = np.concatenate((new_cnts, np.expand_dims(new_cnts[:, 0, :], axis=1)), axis=1) # 把去除的那个点加回来保证格式与原来的相同
+            new_cnts = new_cnts.transpose(1, 2, 0)
+            new_cnts = new_cnts[:, ::-1, :]
+            new_cnts = np.round(new_cnts / scale, decimals=0)
+            np.save(file, new_cnts.astype(np.float64))
+            file.close()
+    else:
         new_cnts = cnts.copy()
         new_cnts = np.array(new_cnts)
-        new_cnts = np.concatenate((new_cnts, np.expand_dims(new_cnts[:, 0, :], axis=1)), axis=1) # 把去除的那个点加回来保证格式与原来的相同
+        new_cnts = np.concatenate((new_cnts, np.expand_dims(new_cnts[:, 0, :], axis=1)), axis=1)
         new_cnts = new_cnts.transpose(1, 2, 0)
         new_cnts = new_cnts[:, ::-1, :]
         new_cnts = np.round(new_cnts / scale, decimals=0)
-        np.save(file, new_cnts.astype(np.float64))
-        file.close()
+        for file in os.listdir("."):
+            if file.startswith("~temp"):
+                os.remove(file)
+        np.save(f"~temp-{current_image_no}.npy", new_cnts.astype(np.float64))
 
 def pop_startup_window(root):
     def cancel():
@@ -500,6 +512,7 @@ if __name__ == "__main__":
         global current_image_no
         global curr_contour
         (cnts[current_image_no], undo_stack[current_image_no], redo_stack[current_image_no]) = curr_contour.cache_result()
+        save_new_cnts(scale=scale, temp=True)
         current_image_no = new_no
         if current_image_no >= image_no:
             current_image_no = 0
@@ -527,6 +540,11 @@ if __name__ == "__main__":
             change_image(new_image_no)
         else:
             jump_num.delete(0, "end")
+    
+    def clear_temp_files():
+        for file in os.listdir("."):
+            if file.startswith("~temp"):
+                os.remove(file)
 
     jump_button.config(command=lambda:jump_image())
     prev_image_button.config(command=lambda:change_image(current_image_no-1))
@@ -537,4 +555,5 @@ if __name__ == "__main__":
     root.bind("<Control-s>", lambda e:save_new_cnts(scale=scale))
     root.bind("<Control-S>", lambda e:save_new_cnts(scale=scale))
     root.bind("<Return>", lambda e:jump_image())
+    root.bind("<Destroy>", lambda e:clear_temp_files())
     root.mainloop()
